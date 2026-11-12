@@ -1,0 +1,33 @@
+name: Docker Stack Verification
+
+on:
+  workflow_call:
+
+jobs:
+  smoke-test:
+    name: Docker Compose Build & Health Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Start full stack via Docker Compose
+        run: docker compose up --build -d
+
+      - name: Wait for Backend Actuator Health
+        run: |
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8080/actuator/health | grep -q '"status":"UP"'; then
+              echo "LedgerLock backend is UP and healthy."
+              exit 0
+            fi
+            echo "Waiting for ledger-lock-backend ($i/30)..."
+            sleep 3
+          done
+          docker compose logs
+          exit 1
+
+      - name: Tear down stack
+        if: always()
+        run: docker compose down -v

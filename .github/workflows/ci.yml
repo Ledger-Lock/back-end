@@ -1,0 +1,38 @@
+name: LedgerLock CI/CD Pipeline
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+jobs:
+  lint-and-format:
+    name: Formatting & Linting
+    uses: ./.github/workflows/lint-and-format.yml
+
+  test-and-quality:
+    name: Tests & SonarQube
+    needs: lint-and-format
+    uses: ./.github/workflows/test-and-sonar.yml
+    secrets:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+
+  docker-smoke-test:
+    name: Container & Health Verification
+    needs: lint-and-format
+    uses: ./.github/workflows/docker-verify.yml
+
+  deploy-production:
+    name: Deploy to Oracle Server
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [lint-and-format, test-and-quality, docker-smoke-test]
+    uses: ./.github/workflows/deploy.yml
+    secrets:
+      ORACLE_HOST: ${{ secrets.ORACLE_HOST }}
+      ORACLE_USER: ${{ secrets.ORACLE_USER }}
+      ORACLE_SSH_KEY: ${{ secrets.ORACLE_SSH_KEY }}

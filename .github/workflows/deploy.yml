@@ -1,0 +1,31 @@
+name: Oracle Server Deploy
+
+on:
+  workflow_call:
+    secrets:
+      ORACLE_HOST:
+        required: true
+      ORACLE_USER:
+        required: true
+      ORACLE_SSH_KEY:
+        required: true
+
+jobs:
+  deploy:
+    name: Deploy to Oracle Server
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.ORACLE_HOST }}
+          username: ${{ secrets.ORACLE_USER }}
+          key: ${{ secrets.ORACLE_SSH_KEY }}
+          script_stop: true
+          script: |
+            cd /home/ubuntu/ledger-lock
+            git fetch origin main
+            git reset --hard origin/main
+            docker compose -f docker-compose.yaml -f docker-compose.prod.yaml up -d --build
+            docker image prune -f

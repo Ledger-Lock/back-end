@@ -1,0 +1,23 @@
+name: Lint & Format Check
+
+on:
+  workflow_call:
+
+jobs:
+  lint-format:
+    name: Formatting & Linting (Spotless & Checkstyle)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 25 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          java-version: "25"
+          distribution: "temurin"
+          cache: "maven"
+
+      - name: Run Spotless & Checkstyle
+        run: ./mvnw spotless:check checkstyle:check -B
