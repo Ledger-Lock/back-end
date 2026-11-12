@@ -14,9 +14,11 @@ sequenceDiagram
     participant Audit as AuditService
     participant Adapter as BillerAdapter
     participant Events as ApplicationEventPublisher
+
     Caller ->> Ctrl: POST /api/v1/payments<br/>(Idempotency-Key, billerCode, customerRef, billAmount)
     Ctrl ->> PaySvc: initiatePayment(command, actorId)
     PaySvc ->> PaySvc: Check idempotencyKey in payments table
+
     alt Idempotency-Key already exists
         PaySvc -->> Ctrl: Return stored original PaymentResponse (200 OK)
     else New Idempotency-Key
@@ -29,40 +31,34 @@ sequenceDiagram
             PaySvc ->> Fee: calculate(billerCode, category, billAmount, isAgent)
             Fee -->> PaySvc: FeeBreakdown(serviceFee, totalAmount, agentCommission)
 
-            rect rgb(235, 248, 255)
-                Note over PaySvc, Audit: Atomic TX 1 — Lock Wallet, Hold Funds & Persist SENT_TO_BILLER
-                PaySvc ->> WalletRepo: findByUserIdForUpdate(payerUserId)
-                WalletRepo -->> PaySvc: Locked Wallet
-                PaySvc ->> PaySvc: wallet.hold(totalAmount) -> LedgerEntry(HOLD)
-                PaySvc ->> PaySvc: payment.transitionTo(FUNDS_HELD -> SENT_TO_BILLER)
-                PaySvc ->> Audit: record(actorId, "FUNDS_HELD", paymentRef)
-            end
+            Note over PaySvc, Audit: Atomic TX 1 — Lock Wallet, Hold Funds & Persist SENT_TO_BILLER
+            PaySvc ->> WalletRepo: findByUserIdForUpdate(payerUserId)
+            WalletRepo -->> PaySvc: Locked Wallet
+            PaySvc ->> PaySvc: wallet.hold(totalAmount) -> LedgerEntry(HOLD)
+            PaySvc ->> PaySvc: payment.transitionTo(FUNDS_HELD -> SENT_TO_BILLER)
+            PaySvc ->> Audit: record(actorId, "FUNDS_HELD", paymentRef)
 
             PaySvc ->> Adapter: pay(BillerPaymentRequest) [10s timeout]
 
             alt Biller Confirms Success
-                rect rgb(235, 255, 240)
-                    Note over PaySvc, Events: Atomic TX 2 — Capture Hold, Credit Commission & Publish Event
-                    PaySvc ->> WalletRepo: findByUserIdForUpdate(payerUserId)
-                    PaySvc ->> PaySvc: wallet.captureHold(totalAmount) -> LedgerEntry(CAPTURE)
-                    opt isAgent && agentCommission > 0
-                        PaySvc ->> WalletRepo: findByUserIdForUpdate(agentUserId)
-                        PaySvc ->> PaySvc: agentWallet.credit(agentCommission) -> LedgerEntry(AGENT_COMMISSION)
-                    end
-                    PaySvc ->> PaySvc: payment.transitionTo(COMPLETED)
-                    PaySvc ->> Audit: record(actorId, "PAYMENT_COMPLETED", paymentRef)
-                    PaySvc ->> Events: publishEvent(PaymentCompletedEvent)
+                Note over PaySvc, Events: Atomic TX 2 — Capture Hold, Credit Commission & Publish Event
+                PaySvc ->> WalletRepo: findByUserIdForUpdate(payerUserId)
+                PaySvc ->> PaySvc: wallet.captureHold(totalAmount) -> LedgerEntry(CAPTURE)
+                opt isAgent && agentCommission > 0
+                    PaySvc ->> WalletRepo: findByUserIdForUpdate(agentUserId)
+                    PaySvc ->> PaySvc: agentWallet.credit(agentCommission) -> LedgerEntry(AGENT_COMMISSION)
                 end
+                PaySvc ->> PaySvc: payment.transitionTo(COMPLETED)
+                PaySvc ->> Audit: record(actorId, "PAYMENT_COMPLETED", paymentRef)
+                PaySvc ->> Events: publishEvent(PaymentCompletedEvent)
                 PaySvc -->> Ctrl: 201 Created (PaymentResponse: COMPLETED)
             else Biller Refuses (4xx / Business Error)
-                rect rgb(255, 240, 240)
-                    Note over PaySvc, Events: Atomic TX 2b — Release Held Funds & Notify Failure
-                    PaySvc ->> WalletRepo: findByUserIdForUpdate(payerUserId)
-                    PaySvc ->> PaySvc: wallet.releaseHold(totalAmount) -> LedgerEntry(RELEASE)
-                    PaySvc ->> PaySvc: payment.transitionTo(FAILED -> REFUNDED)
-                    PaySvc ->> Audit: record(actorId, "PAYMENT_FAILED_REFUNDED", paymentRef)
-                    PaySvc ->> Events: publishEvent(PaymentFailedEvent)
-                end
+                Note over PaySvc, Events: Atomic TX 2b — Release Held Funds & Notify Failure
+                PaySvc ->> WalletRepo: findByUserIdForUpdate(payerUserId)
+                PaySvc ->> PaySvc: wallet.releaseHold(totalAmount) -> LedgerEntry(RELEASE)
+                PaySvc ->> PaySvc: payment.transitionTo(FAILED -> REFUNDED)
+                PaySvc ->> Audit: record(actorId, "PAYMENT_FAILED_REFUNDED", paymentRef)
+                PaySvc ->> Events: publishEvent(PaymentFailedEvent)
                 PaySvc -->> Ctrl: 200 OK / 400 (PaymentResponse: REFUNDED)
             else Biller Timeout (> 10s)
                 PaySvc ->> PaySvc: payment.transitionTo(UNKNOWN), schedule retry (+1m)
@@ -142,17 +138,15 @@ sequenceDiagram
         Note over PaySvc: Funds already in FUNDS_HELD, state = SENT_TO_BILLER
         PaySvc ->> PaySvc: billerAdapter.pay() returns BillerRefusedException("INVALID_METER")
 
-        rect rgb(255, 240, 240)
-            Note over PaySvc, Audit: Atomic TX — Release Hold, Transition FAILED -> REFUNDED
-            PaySvc ->> WalletRepo: findByUserIdForUpdate(payerUserId)
-            WalletRepo -->> PaySvc: Locked Wallet
-            PaySvc ->> PaySvc: wallet.releaseHold(totalAmount)
-            PaySvc ->> PaySvc: Append LedgerEntry(RELEASE, amount=totalAmount, heldAfter=0)
-            PaySvc ->> PaySvc: payment.transitionTo(FAILED, "Biller refused: INVALID_METER")
-            PaySvc ->> PaySvc: payment.transitionTo(REFUNDED, "Hold released to wallet balance")
-            PaySvc ->> Audit: record(SYSTEM, "PAYMENT_REFUNDED_HOLD_RELEASED", paymentRef)
-            PaySvc ->> Events: publishEvent(PaymentFailedEvent(paymentRef, reason))
-        end
+        Note over PaySvc, Audit: Atomic TX — Release Hold, Transition FAILED -> REFUNDED
+        PaySvc ->> WalletRepo: findByUserIdForUpdate(payerUserId)
+        WalletRepo -->> PaySvc: Locked Wallet
+        PaySvc ->> PaySvc: wallet.releaseHold(totalAmount)
+        PaySvc ->> PaySvc: Append LedgerEntry(RELEASE, amount=totalAmount, heldAfter=0)
+        PaySvc ->> PaySvc: payment.transitionTo(FAILED, "Biller refused: INVALID_METER")
+        PaySvc ->> PaySvc: payment.transitionTo(REFUNDED, "Hold released to wallet balance")
+        PaySvc ->> Audit: record(SYSTEM, "PAYMENT_REFUNDED_HOLD_RELEASED", paymentRef)
+        PaySvc ->> Events: publishEvent(PaymentFailedEvent(paymentRef, reason))
 
         Events ->> Notif: onPaymentFailed(event)
         Notif ->> Notif: Dispatch SMS & Push notification with failure reason
@@ -165,22 +159,20 @@ sequenceDiagram
         Ctrl ->> PaySvc: approveRefund(paymentRef, supportActorId, reason)
         PaySvc ->> PaySvc: Lock Payment (status must be COMPLETED)
 
-        rect rgb(240, 248, 255)
-            Note over PaySvc, Audit: Atomic TX — Compensating Wallet Credit & State Transition
-            PaySvc ->> WalletRepo: findByUserIdForUpdate(payerUserId)
-            WalletRepo -->> PaySvc: Locked Customer Wallet
-            PaySvc ->> PaySvc: customerWallet.credit(totalAmount, REFUND)
-            PaySvc ->> PaySvc: Append LedgerEntry(REFUND, amount=totalAmount, availableAfter+=totalAmount)
-            opt Agent was involved and earned commission (FR-17)
-                PaySvc ->> WalletRepo: findByUserIdForUpdate(agentUserId)
-                WalletRepo -->> PaySvc: Locked Agent Wallet
-                PaySvc ->> PaySvc: agentWallet.debit(commissionAmount, COMMISSION_REVERSAL)
-                PaySvc ->> PaySvc: Append LedgerEntry(COMMISSION_REVERSAL, amount=commissionAmount)
-            end
-            PaySvc ->> PaySvc: payment.transitionTo(REFUNDED, reason)
-            PaySvc ->> Audit: record(supportActorId, "SUPPORT_REFUND_APPROVED", paymentRef)
-            PaySvc ->> Events: publishEvent(PaymentRefundedEvent(paymentRef))
+        Note over PaySvc, Audit: Atomic TX — Compensating Wallet Credit & State Transition
+        PaySvc ->> WalletRepo: findByUserIdForUpdate(payerUserId)
+        WalletRepo -->> PaySvc: Locked Customer Wallet
+        PaySvc ->> PaySvc: customerWallet.credit(totalAmount, REFUND)
+        PaySvc ->> PaySvc: Append LedgerEntry(REFUND, amount=totalAmount, availableAfter+=totalAmount)
+        opt Agent was involved and earned commission (FR-17)
+            PaySvc ->> WalletRepo: findByUserIdForUpdate(agentUserId)
+            WalletRepo -->> PaySvc: Locked Agent Wallet
+            PaySvc ->> PaySvc: agentWallet.debit(commissionAmount, COMMISSION_REVERSAL)
+            PaySvc ->> PaySvc: Append LedgerEntry(COMMISSION_REVERSAL, amount=commissionAmount)
         end
+        PaySvc ->> PaySvc: payment.transitionTo(REFUNDED, reason)
+        PaySvc ->> Audit: record(supportActorId, "SUPPORT_REFUND_APPROVED", paymentRef)
+        PaySvc ->> Events: publishEvent(PaymentRefundedEvent(paymentRef))
 
         Events ->> Notif: onPaymentRefunded(event)
         Notif ->> Notif: Dispatch refund receipt SMS & Push notification
