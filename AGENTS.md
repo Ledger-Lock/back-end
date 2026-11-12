@@ -8,16 +8,15 @@
   `reconciliation`, `security`, `audit`) enforced via Spring Modulith / ArchUnit architectural tests
   (`ModularArchitectureTest`).
   Keep repositories, JPA entities (where external modules only need IDs/DTOs), and protocol-specific adapters
-  package-private,
-  and never create circular dependencies between packages.
+  package-private, and never create circular dependencies between packages.
 - **Authentication & Security:** Self-contained Spring Security stateless JWT authentication (`CUSTOMER`, `AGENT`,
   `SUPPORT`, `ADMIN`). Never introduce external IdPs (such as Keycloak) into the project or Compose stack.
 - **Logging:** Keep human-readable console logs in default/local profiles (`application.yaml`); keep structured ECS JSON
   logging isolated to `application-prod.yaml` (`prod` profile) and always populate SLF4J `MDC` (`paymentReference`,
   `billerCode`) on payment/webhook flows.
 - **Documentation & Design Artifacts:** Keep all Markdown files (`README.md`, `docs/requirements.md`,
-  `docs/design/*.md`,
-  `docs/prompt-log.md`) strictly emoji-free and synchronized with the Phase 1 Design Pack (`01-use-case-diagram.md`
+  `docs/design/*.md`, `docs/prompt-log.md`) strictly emoji-free and synchronized with the Phase 1 Design Pack
+  (`01-use-case-diagram.md`
   through `05-er-diagram.md`).
 
 ## 2. Non-Negotiable Domain Rules
@@ -53,8 +52,7 @@
   import removal) and `./mvnw checkstyle:check` (`google_checks.xml`) in CI (`lint-and-format.yml`). Run
   `./mvnw spotless:apply` after generating or editing Java files.
 - **Static Analysis & Coverage:** Maintain `>= 70%` JaCoCo line coverage on domain and business logic packages
-  (`test.yml`)
-  and `0` critical/blocker issues or new security hotspots in **SonarQube** (`sonar.yml`).
+  (`test.yml`) and `0` critical/blocker issues or new security hotspots in **SonarQube** (`sonar.yml`).
 - **Commit Attribution:** Whenever AI generates >50% of a change, include `[AI: Antigravity]` in the Git commit message
   and append an entry to `/docs/prompt-log.md`.
 - **Clean Code:** Keep SonarQube and Checkstyle clean (no unused imports, standard formatting, constructor injection,

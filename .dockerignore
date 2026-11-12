@@ -2,7 +2,7 @@
 .github
 .idea
 .vscode
-.agent
+.agents
 target/
 docs/
 *.md
