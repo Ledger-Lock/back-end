@@ -1,0 +1,33 @@
+name: Unit & Integration Tests
+
+on:
+  workflow_call:
+
+jobs:
+  test:
+    name: Maven Tests & JaCoCo Coverage
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Java 25 (Temurin)
+        uses: actions/setup-java@v5
+        with:
+          java-version: "25"
+          distribution: "temurin"
+          cache: "maven"
+
+      - name: Run Maven Verify (Tests + JaCoCo)
+        run: chmod +x mvnw && ./mvnw verify -Dspotless.check.skip=true -Dcheckstyle.skip=true -B
+
+      - name: Upload Build & JaCoCo Artifacts for SonarQube
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-and-jacoco
+          path: |
+            target/classes/
+            target/test-classes/
+            target/site/jacoco/
+          retention-days: 1

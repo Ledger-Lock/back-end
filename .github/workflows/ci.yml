@@ -14,10 +14,15 @@ jobs:
     name: Formatting & Linting
     uses: ./.github/workflows/lint-and-format.yml
 
-  test-and-quality:
-    name: Tests & SonarQube
+  unit-and-integration-tests:
+    name: Tests & Coverage
     needs: lint-and-format
-    uses: ./.github/workflows/test-and-sonar.yml
+    uses: ./.github/workflows/test.yml
+
+  sonarqube-analysis:
+    name: SonarQube Quality Gate
+    needs: unit-and-integration-tests
+    uses: ./.github/workflows/sonar.yml
     secrets:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
       SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
@@ -30,7 +35,7 @@ jobs:
   deploy-production:
     name: Deploy to Oracle Server
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [lint-and-format, test-and-quality, docker-smoke-test]
+    needs: [lint-and-format, unit-and-integration-tests, sonarqube-analysis, docker-smoke-test]
     uses: ./.github/workflows/deploy.yml
     secrets:
       ORACLE_HOST: ${{ secrets.ORACLE_HOST }}

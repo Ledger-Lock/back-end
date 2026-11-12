@@ -10,14 +10,14 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Java 25 (Temurin)
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           java-version: "25"
           distribution: "temurin"
           cache: "maven"
 
       - name: Run Spotless & Checkstyle
-        run: ./mvnw spotless:check checkstyle:check -B
+        run: chmod +x mvnw && ./mvnw spotless:check checkstyle:check -B
