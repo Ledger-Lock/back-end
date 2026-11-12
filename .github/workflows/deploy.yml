@@ -12,11 +12,11 @@ on:
 
 jobs:
   deploy:
-    name: Deploy to Oracle Server
+    name: Deploy & Health Check (with Rollback Support)
     runs-on: ubuntu-latest
 
     steps:
-      - name: Deploy via SSH
+      - name: Deploy via SSH & Verify Health
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.ORACLE_HOST }}
@@ -25,7 +25,31 @@ jobs:
           script_stop: true
           script: |
             cd /home/ubuntu/ledger-lock
+            PREV_COMMIT=$(git rev-parse HEAD)
             git fetch origin main
             git reset --hard origin/main
             docker compose -f docker-compose.yaml -f docker-compose.prod.yaml up -d --build
+
+            echo "Verifying deployment health via container healthcheck..."
+            HEALTHY=false
+            for i in $(seq 1 30); do
+              STATUS=$(docker inspect --format='{{.State.Health.Status}}' ledger-lock-backend 2>/dev/null || echo "starting")
+              if [ "$STATUS" = "healthy" ]; then
+                echo "Deployment healthy and verified (container status: healthy)."
+                HEALTHY=true
+                break
+              fi
+              echo "Waiting for container health ($STATUS, $i/30)..."
+              sleep 3
+            done
+
+            if [ "$HEALTHY" != "true" ]; then
+              echo "Health check failed! Current status: $STATUS"
+              docker logs --tail 100 ledger-lock-backend
+              echo "Initiating automated rollback to $PREV_COMMIT..."
+              git reset --hard "$PREV_COMMIT"
+              docker compose -f docker-compose.yaml -f docker-compose.prod.yaml up -d --build
+              exit 1
+            fi
+
             docker image prune -f

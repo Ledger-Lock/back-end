@@ -2,9 +2,9 @@ name: LedgerLock CI/CD Pipeline
 
 on:
   push:
-    branches: ["main"]
+    branches: [ "main" ]
   pull_request:
-    branches: ["main"]
+    branches: [ "main" ]
 
 permissions:
   contents: read
@@ -35,7 +35,7 @@ jobs:
   deploy-production:
     name: Deploy to Oracle Server
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [lint-and-format, unit-and-integration-tests, sonarqube-analysis, docker-smoke-test]
+    needs: [ lint-and-format, unit-and-integration-tests, sonarqube-analysis, docker-smoke-test ]
     uses: ./.github/workflows/deploy.yml
     secrets:
       ORACLE_HOST: ${{ secrets.ORACLE_HOST }}

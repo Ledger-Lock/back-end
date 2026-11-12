@@ -31,7 +31,8 @@
         <jacoco.version>0.8.14</jacoco.version>
         <sonar.projectKey>ledger-lock_back-end</sonar.projectKey>
         <sonar.projectName>LedgerLock Backend</sonar.projectName>
-        <sonar.coverage.jacoco.xmlReportPaths>${project.build.directory}/site/jacoco/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
+        <sonar.coverage.jacoco.xmlReportPaths>${project.build.directory}/site/jacoco/jacoco.xml
+        </sonar.coverage.jacoco.xmlReportPaths>
         <spotless.version>2.44.4</spotless.version>
         <maven-checkstyle.version>3.6.0</maven-checkstyle.version>
     </properties>

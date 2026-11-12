@@ -1,8 +1,9 @@
-# LedgerLock — Software Requirements Specification (Phase 1)
+# LedgerLock — Software Requirements Specification (PayLink Backend — Phase 1)
 
 ## 1. Problem Summary
 
-LedgerLock (GitHub repository: `ledger-lock/back-end`) is an Egyptian digital wallet and bill-payment backend platform.
+LedgerLock (GitHub repository: `ledger-lock/back-end`) is an Egyptian digital wallet and bill-payment backend platform
+implementing the PayLink project specification.
 Customers and retail agents (operating point-of-sale terminals) use the platform to inquire about and pay recurring
 utility bills—specifically electricity, water, mobile top-ups, and internet services—directly from an EGP-denominated
 digital wallet.
